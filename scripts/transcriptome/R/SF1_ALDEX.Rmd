@@ -1,0 +1,71 @@
+---
+title: "SF1_Aldex"
+author: "Stephen Formel"
+date: "11/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Exploration of differential gene expression in the *Spartina altenirflora* root transcriptome.  Following [ALDEx2 tutorial](https://www.bioconductor.org/packages/release/bioc/vignettes/ALDEx2/inst/doc/ALDEx2_vignette.pdf)
+
+```{r load libraries}
+library(here)
+library(ALDEx2)
+library(tidyverse)
+library(reshape2)
+```
+
+- Create Aldex MA and Effects plots
+
+```{r}
+
+#load in Salmon Isoform counts
+
+df <- read.table(here("data",
+                      "transcriptome",
+                      "SF1_Trinity_24Mar2019_output",
+                      "salmon_output",
+                      "salmon.isoform.counts.matrix"),
+                 header=T, 
+                 com='',
+                 row.names=1,
+                 check.names=F,
+                 sep='\t')
+
+#load in Experimental Conditions
+
+conds <- names(df) %>% 
+  colsplit(pattern = "_" ,
+           names = c("rm", "Soil", "rm2", "Oil", "Rep")) %>% 
+  select(-rm, -rm2)
+
+```
+
+Run Aldex
+
+```{r}
+
+#create subset for testing
+df.sub <- df[1:400,]
+
+Sys.time()
+x.all <- aldex(df.sub, conds, mc.samples= length(names(df)), test="t", effect=TRUE,
+include.sample.summary=FALSE, denom="all", verbose=FALSE)
+
+Sys.time()
+```
+
+Plot
+
+```{r}
+
+par(mfrow=c(1,2))
+aldex.plot(x.all, type="MA", test="welch", xlab="Log-ratio abundance", ylab="Difference")
+aldex.plot(x.all, type="MW", test="welch", xlab="Dispersion",
+ylab="Difference")
+
+```
+
