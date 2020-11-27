@@ -1,0 +1,172 @@
+---
+title: "SF1 Biomass"
+author: "Stephen Formel"
+date: "11/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Last updated: Nov 27, 2020
+```
+
+## Plant Biomass for SF1 project
+
+Three quantities were measured.
+
+1. AG = Aboveground biomass inside the experimental space
+1. IR = Root biomass that was inside the experimental space
+1. OT = All tissue (Above and below) that was outside the experimental space.
+
+When we harvested the plants, it seemed like the ones with the most outside tissue were the ones with the most cracked jars, which makes sense.
+
+## load libraries
+
+```{r, message = FALSE}
+
+library(readxl)
+library(tidyverse)
+library(ggplot2)
+library(here)
+library(brms)
+library(modelr)
+library(tidybayes)
+
+```
+
+
+## load and clean data
+
+```{r}
+
+df <- read_excel(here("data", 
+                      "plant", 
+                      "SF1_GC_data.xlsx"),
+                 sheet = "biomass")
+
+#Make total mass
+df <- df %>%
+  group_by(plantID) %>%
+  mutate(total_mass = sum(dry_mass))
+
+
+```
+
+
+## Explore data
+
+```{r}
+
+#All tissue types
+df %>%
+  ggplot(aes(x = oil, 
+             y = dry_mass, 
+             fill = Tissue)) +
+  geom_boxplot() +
+  facet_grid(~ ifelse(soil=="L", "Live Soil", "Sterile Soil")) +
+  xlab("Oil Added")
+
+#Total Biomass
+df %>%
+  ggplot(aes(x = oil, 
+             y = total_mass, 
+             fill = soil)) +
+  geom_boxplot() +
+  xlab("Oil Added")
+
+```
+
+Oil might have affected plants growing in autoclaved soil, but it did not effect those growing in live soil.
+
+```{r}
+
+m <- lm(total_mass ~ soil*oil, data = df)
+summary(m)
+hist(resid(m))
+shapiro.test(resid(m))
+
+```
+
+See if it can be transformed
+
+```{r}
+
+m <- lm(sqrt(total_mass) ~ soil*oil, data = df)
+summary(m)
+hist(resid(m))
+shapiro.test(resid(m))
+
+m <- lm(log(total_mass) ~ soil*oil, data = df)
+summary(m)
+hist(resid(m))
+shapiro.test(resid(m))
+
+```
+
+
+Can't be transformed. Let's see if we can fit it with Bayes.
+
+## Bayesian LM
+
+Make model
+
+```{r, message = FALSE, results = 'hide'}
+
+b0 <- brm(total_mass ~ 1 + soil*oil, 
+          data = df,
+          family = "skew_normal",
+          chains = 4, cores = 4,
+          seed = 1)
+```
+
+Check model Results
+
+```{r}
+
+#https://bayesed-and-confused.netlify.app/post/model-fit-checks/
+
+M <- b0
+pp_check(object = M, type = "dens_overlay", nsamples = 100)
+pp_check(M, type = "stat", stat = 'median', nsamples = 100)
+pp_check(M, type = "stat", stat = 'mean', nsamples = 100)
+pp_check(M,type = 'intervals', nsamples = 100)
+
+plot(M)
+as.data.frame(posterior_summary(M))
+
+#R2
+as.data.frame(bayes_R2(object = M,resp = NULL,summary = TRUE,robust = FALSE,probs = c(0.025, 0.975)))
+
+#loo_R2
+loo_R2(object = M)
+
+```
+
+Not a perfect model, but it does look like sterile soil increased the biomass, while oil decreased it.  Probably not interactive effect, however.
+
+## Plot with tidy_bayes-----
+
+```{r}
+
+grid = df %>%
+  data_grid(soil, oil)
+
+fits = grid %>%
+  add_fitted_draws(M)
+
+preds = grid %>%
+  add_predicted_draws(M)
+
+df %>%
+  ggplot(aes(x = total_mass, y = interaction(oil, soil))) +
+  stat_halfeye(aes(x = .value), scale = 0.6, position = position_nudge(y = 0.175), data = fits) +
+  stat_interval(aes(x = .prediction), data = preds) +
+  geom_point(data = df) +
+  scale_color_brewer() +
+  theme_bw()
+
+```
+
+This shows posteriors of the mean of each group (black intervals and the density plots) and posterior predictive intervals (blue).
+
