@@ -1,0 +1,17 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+.DS_Store
+Icon?
+
+data/
+figs/
+manuscript/
+methods/
+non-data_photos/
+notebooks_stats/
+S5_SF1_ITS_seqs_BI/
+SF1_pilot/
+trinotate_test/

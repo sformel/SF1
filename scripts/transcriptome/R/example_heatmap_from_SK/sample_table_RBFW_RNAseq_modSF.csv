@@ -1,0 +1,5 @@
+sampleName,fileName,Sex,sampleType,samplePart,sampleColor,samplePhenotype,PartColor,PhenotypePart,Treatment,ABBBS
+F100,mpg_L13563-1_F100_S29.ReadsPerGene.out.tab.DEseq.input,M,feather,chest,black,TDM,chest_black,TDM_chest,after,01A-55334
+F97,mpg_L13561-1_F97_S25.ReadsPerGene.out.tab.DEseq.input,M,feather,chest,black,TDM,chest_black,TDM_chest,after,01A-53759
+F18,mpg_L13543-1_F18_S3.ReadsPerGene.out.tab.DEseq.input,M,feather,chest,black,BM,chest_black,BM_chest,,01A-36877
+F32,mpg_L13541-2_F32_S1.ReadsPerGene.out.tab.DEseq.input,M,feather,chest,black,BM,chest_black,BM_chest,,01A-53402

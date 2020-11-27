@@ -1,0 +1,14 @@
+//This is a macro for imageJ to sume all the lengths in the results box as measured in the ROI Manager
+
+macro "Measure Cumlative Length [1]" {
+	Sum = 0; 
+	selectWindow("Results"); 
+	lines1 = split(getInfo(), "\n"); 
+	headings = split(lines1[0], "\t"); 
+	for (j=1; j<lines1.length; j++) { 
+	values = split(lines1[j], "\t"); 
+        	a = values[1]; 
+        	sum = sum + a; 
+	setResult('total_length', nResults-1, sum);
+     updateResults();
+  }
