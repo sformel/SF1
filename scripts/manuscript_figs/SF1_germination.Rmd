@@ -1,0 +1,150 @@
+---
+title: "SF1 Germination"
+author: "Stephen Formel"
+date: "11/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Last updated: Nov 27, 2020
+
+```
+
+Load Libraries
+
+```{r, message=FALSE}
+
+library(readxl)
+library(here)
+library(tidyverse)
+library(ggplot2)
+library(knitr)
+
+```
+
+Load and clean data
+
+```{r}
+
+df <- read_excel(here("data", 
+                      "plant", 
+                      "SF1_GC_data.xlsx"),
+                 sheet = "germination")
+
+```
+
+Percent Germinated
+```{r}
+
+#Percent germinated at experiment end
+
+df.mean <- df %>%
+  filter(day_number==28) %>%
+  group_by(soil, oil) %>% 
+  summarise(perc_germ = (12-not_germinated) / 12) %>% 
+  group_by(soil, oil) %>%
+  summarise(mean_perc_germ = mean(perc_germ),
+            sd = sd(perc_germ),
+            se = sd(perc_germ)/sqrt(n()))
+
+kable(df.mean)
+
+df.mean %>%
+  ggplot(aes(x = soil,
+           y = mean_perc_germ,
+           fill = oil)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = mean_perc_germ-2*se,
+                    ymax = mean_perc_germ+2*se),
+                width = 0.2) +
+  facet_wrap(~ oil)
+
+
+```
+
+## Stats on percent germinated
+
+The idea here is to get a percentage of seeds germinated from each pot and then treat those as continuous variables.  I think this is ok as long as the variance is equal.  See [this discussion](https://stats.stackexchange.com/questions/11296/using-anova-on-percentages)
+
+```{r}
+
+df.perc <- df %>%
+  filter(day_number==28) %>%
+  group_by(soil, oil) %>% 
+  summarise(perc_germ = (12-not_germinated) / 12) 
+
+M <- lm(perc_germ ~ soil*oil, data = df.perc)
+
+summary(M)
+hist(resid(M))
+shapiro.test(resid(M))
+
+```
+
+Check heteroscedasticity and normality
+
+```{r}
+
+df %>%
+  filter(day_number==28) %>%
+  ggplot(aes(x = soil,
+           y = 12-not_germinated,
+           color = oil)) +
+  geom_boxplot()
+
+
+```
+
+Looks reasonable to me.
+
+## Germination Rate
+
+```{r}
+
+M <- glm(perc_germ ~ soil*oil, family = quasibinomial, 
+         weights = rep(12, nrow(df.perc)),
+          data = df.perc)
+
+#Adding weights doesn't seem to make a diference in results.
+
+summary(M)
+plot(M$residuals, M$fitted.values)
+
+
+```
+
+Whether soil was autoclaved or not is barely significant. I have a feeling if I remove the two replicates that didn't germinate any seeds, this will disappear.
+
+```{r}
+
+df.perc.no.zero <- df.perc %>% 
+  filter(perc_germ!=0)
+
+M <- glm(perc_germ ~ soil*oil, family = quasibinomial,
+          data = df.perc.no.zero)
+
+summary(M)
+
+```
+
+It only brings the p-value up to 0.08, so perhaps there really is something there.  I'll have to think on that.
+
+## Plot of LOESS smoothing on germination
+
+Nice [explanation](https://www.statisticshowto.com/lowess-smoothing/) of how LOESS smoothing works.
+
+```{r}
+
+ggplot(data = df,
+       aes(x = day_number,
+           y = 12 - not_germinated,
+           shape = factor(oil),
+           color = factor(soil))) +
+  geom_jitter() +
+  geom_smooth() +
+  theme_bw()
+
+```
+
