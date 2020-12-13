@@ -1,0 +1,32 @@
+---
+title: "Annotation with Dammit"
+author: "Stephen Formel"
+date: "11/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#load python package
+```{r}
+library(reticulate)
+use_condaenv(condaenv = "dammit", required = TRUE)
+
+```
+
+## Annotating with dammit
+
+Used dammit version 1.2
+
+But I couldn't get the python doe to render here.  So I'm going to just run it in terminal and keep a record for now.
+```{python}
+
+Quite silly, but BUSCO won't take the file because "Google Drive" has a space in it.  And I can't seem to escape out of it. So I'm running this annotation in a different folder and moving it to SF1 afterward.
+
+dammit annotate /Users/stephenformel/Google\ Drive/VB_lab/VBL_users/Grad_Students/Steve/SF1/data/transcriptome/SF1_Trinity_24Mar2019_output/Trinity.fasta --busco-group eukaryota --n_threads 4
+
+Started at 4:30pm on Nov 30, 2020
+```
+

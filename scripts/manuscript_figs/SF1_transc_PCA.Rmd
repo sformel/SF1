@@ -1,0 +1,148 @@
+---
+title: "SF1_transcriptome_PCA"
+author: "Stephen Formel"
+date: "12/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Make PCA of Root Transcriptome on Aithcison distance
+
+last updated: Dec 12, 2020 by Steve Formel
+
+script modified from elements of  Trinity script: salmon.isoform.counts.matrix.R
+
+by Steve Formel
+
+## Load Libraries
+
+```{r, echo=FALSE, message=FALSE}
+
+library(here)
+library(tidyverse)
+library(compositions)
+library(vegan)
+library(plyr)
+library(partools)
+
+
+```
+
+## Load in data and Trinity scripts
+
+```{r}
+
+df = read.table(here::here("data",
+                     "transcriptome",
+                     "SF1_Trinity_24Mar2019_output",
+                     "salmon_output",
+                     "salmon.isoform.counts.matrix"), 
+                header=T,
+                com='', 
+                row.names=1,
+                check.names=F,
+                sep='\t')
+
+
+df.meta = read.csv(here::here("data",
+                        "transcriptome",
+                        "SF1_Trinity_24Mar2019_output",
+                        "salmon_output",
+                        "SF1_done_sample_sheet.csv"), 
+                        fileEncoding="UTF-8-BOM")
+
+colnames(df) <- df.meta$sample_ID
+
+```
+
+## CLR Transformation and generate PCA
+
+```{r}
+
+#Faciliatate PCA by filtering out genes that are smaller than 10 total counts
+#df <- df[rowSums(df)>=10,]
+
+# clr.df <- clr(df)
+# pca.orig = prcomp(clr.df, center = FALSE, scale. = FALSE)
+# 
+# PCA.loadings=pca.orig$x
+# PCA.scores = pca.orig$rotation
+```
+
+## Correctly Done on Cypress
+
+It turns out that the above version, which mimics the method done in Trinity, produces the same result as what I made below.  However, performing the PCA on the transposed isoform matrix is what made the most sense to me.  It was easy to do on an idev node in Cypress (Tulane HPC), but my macbook pro couldn't handle it.
+
+```{r}
+
+clr.df <- t(clr(df))
+pca = prcomp(clr.df, center = FALSE, scale. = FALSE)
+saveRDS(object = pca , file = SF1_aitchison_PCA_output.RDS)
+
+#RDS Transferred over Cypress into data folder
+
+pca <- readRDS("../../data/transcriptome/SF1_aitchison_PCA_output.RDS")
+PCA.loadings=pca$rotation
+PCA.scores = pca$x
+
+```
+
+## Clean data for Plotting
+
+```{r}
+
+#reorder treatments
+df.meta$Treatment <- interaction(df.meta$soil, df.meta$oil)
+
+#rename
+
+df.meta$Treatment <- plyr::revalue(df.meta$Treatment, c("L.N"="Live Soil , No Oil", "S.N"="Autoclaved Soil , No Oil" , "L.Y" = "Live Soil , Oiled", "S.Y" = "Autoclaved Soil , Oiled"))
+
+#reorder levels
+df.meta$Treatment <- factor(df.meta$Treatment, levels = c("Live Soil , No Oil", "Live Soil , Oiled" , "Autoclaved Soil , No Oil", "Autoclaved Soil , Oiled"))
+
+```
+
+## Plot
+
+```{r}
+
+#get summary data
+pca.sum <- as.data.frame(summary(pca)$importance)
+df.PCA <- cbind(PCA.scores,df.meta)
+
+ggplot(data = df.PCA, 
+                aes(x = PC1, y = PC2, 
+                    fill = Treatment)) +
+  geom_point(size = 6,
+             shape = 21) +
+  geom_polygon(alpha = 0.5) + 
+  scale_fill_manual(values = c("#D55E00", "#56B4E9", "#F0E442","black")) +
+  labs(title = "PCA on Root Transcriptome",
+       x = paste("PC1 (", round(pca.sum$PC1[2]*100, digits = 1), "%)"),
+       y = paste("PC1 (", round(pca.sum$PC2[2]*100, digits = 1), "%)")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+  #ggsave(".png", width = 10, height = 7, units = "in")
+
+```
+
+
+## Permanova
+```{r}
+
+#PERMANOVA on transcriptome----
+t.mat <- t(clr.df)
+genes.df <- as.data.frame(t.mat)
+
+mod1 <- adonis(genes.df ~ soil*oil, data = df.meta, method = "euclidean") #took about 1 min at home
+
+mod1
+
+```
+
+

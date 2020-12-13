@@ -44,7 +44,7 @@ library(pheatmap)
 
 #import data----
 
-#it turns out that salmon estimates countso my numbers have decimals.  Therefore I have to import differently than Srah because I have to account for this using tximport example on: http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html
+#it turns out that salmon estimates countso my numbers have decimals.  Therefore I have to import differently than Sarah because I have to account for this using tximport example on: http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html
 
 #Also see:https://groups.google.com/forum/#!topic/trinityrnaseq-users/8yPuoZh1E5I actually scaled TPM
 

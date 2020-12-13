@@ -9,7 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-Exploration of differential gene expression in the *Spartina altenirflora* root transcriptome.  Following [ALDEx2 tutorial](https://www.bioconductor.org/packages/release/bioc/vignettes/ALDEx2/inst/doc/ALDEx2_vignette.pdf)
+Exploration of differential gene expression in the *Spartina alterniflora* root transcriptome.  Following [ALDEx2 tutorial](https://www.bioconductor.org/packages/release/bioc/vignettes/ALDEx2/inst/doc/ALDEx2_vignette.pdf)
 
 ```{r load libraries}
 library(here)
@@ -35,6 +35,13 @@ df <- read.table(here("data",
                  check.names=F,
                  sep='\t')
 
+#round to make integers
+
+df <- round(df, digits = 0)
+
+df.Live <- df[,c(1:6)]
+df.Auto <- df[,c(7:12)]
+
 #load in Experimental Conditions
 
 conds <- names(df) %>% 
@@ -49,23 +56,110 @@ Run Aldex
 ```{r}
 
 #create subset for testing
-df.sub <- df[1:400,]
+df.sub <- df.Live[1:500000,]
 
-Sys.time()
-x.all <- aldex(df.sub, conds, mc.samples= length(names(df)), test="t", effect=TRUE,
-include.sample.summary=FALSE, denom="all", verbose=FALSE)
+#conditions
+conds <- c(rep("No Oil", 3), rep("Oil Added", 3))
 
-Sys.time()
+
 ```
 
-Plot
+According to the Aldex2 vignette: 
+
+Version 1.04 of ALDEx was the version used for the analysis in Macklaim et al.19. This
+version was suitable only for two-sample two-group comparisons, and provided only effect size
+estimates of difference between groups. ALDEx v1.0.4 is available at:
+https://github.com/ggloor/ALDEx2/blob/master/ALDEx\_1.0.4.tar.gz
+. No further changes are expected for that version since it can be replicated completely within
+ALDEx2 by using only the aldex.clr and aldex.effect commands
+
+## Aldex 1 version
+
+They recommend 1000 or more MC chains for effect size estimation
 
 ```{r}
 
-par(mfrow=c(1,2))
-aldex.plot(x.all, type="MA", test="welch", xlab="Log-ratio abundance", ylab="Difference")
-aldex.plot(x.all, type="MW", test="welch", xlab="Dispersion",
-ylab="Difference")
+Sys.time()
+x <- aldex.clr(df.sub, conds, mc.samples=1000, denom="all", verbose=F, useMC = TRUE)
+x2 <- aldex.effect(x, useMC = TRUE)
+Sys.time()
+
+
+
+plot(x2$diff.btw, x2$diff.win)
 
 ```
+
+See Aldex2 manual section 6.3 for an explanation of effect size as relevant statistic
+
+```{r}
+
+x2 %>% 
+  arrange(effect)
+```
+
+### Didn't work
+
+0.5 million features and 1000 mc.samples was too much for my computer.  I needed to do this on Cypress.  I installed aldex on cypress through bioconda.  But it had issues installing one package.  I fixed those by opening R in the aldex conda environment and then performing the normal bioconductor installation of the package (GenomeInfoDbData).
+
+### Script that was run on Cypress
+
+```{SLURM}
+
+module load anaconda3/5.1.0
+source activate aldex
+
+```
+
+R
+
+library(here)
+library(ALDEx2)
+library(dplyr)
+library(reshape2)
+
+#load in Salmon Isoform counts
+
+df <- read.table(here("salmon.isoform.counts.matrix"),
+                 header=T, 
+                 com='',
+                 row.names=1,
+                 check.names=F,
+                 sep='\t')
+
+#round to make integers
+
+df <- round(df, digits = 0)
+
+df.Live <- df[,c(1:6)]
+df.Auto <- df[,c(7:12)]
+
+#subset for testing
+df.Live <- df.Live[c(1:100000),]
+df.Auto <- df.Auto[c(1:100000),]
+
+#load in Experimental Conditions
+
+conds <- names(df) %>% 
+  colsplit(pattern = "_" ,
+           names = c("rm", "Soil", "rm2", "Oil", "Rep")) %>% 
+  select(-rm, -rm2)
+
+#conditions
+conds <- c(rep("No Oil", 3), rep("Oil Added", 3))
+
+
+clr.mat <- aldex.clr(df.Live, conds, mc.samples=1000, denom="all", verbose=F, useMC = TRUE)
+aldex.out.Live <- aldex.effect(clr.mat, useMC = TRUE)
+
+saveRDS(object = aldex.out.Live, file = "aldex.out.Live.rds")
+
+clr.mat <- aldex.clr(df.Live, conds, mc.samples=1000, denom="all", verbose=F, useMC = TRUE)
+aldex.out.Autoclave <- aldex.effect(clr.mat, useMC = TRUE)
+
+saveRDS(object = aldex.out.Autoclave, file = "aldex.out.Autoclave.rds")
+
+
+```
+
 
