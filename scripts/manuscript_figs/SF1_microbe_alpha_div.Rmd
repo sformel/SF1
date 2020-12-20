@@ -1,0 +1,685 @@
+---
+title: "SF1_Microbial Alpha Diversity"
+author: "Stephen Formel"
+date: "12/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description and notes
+Figure of microbial alpha diversity in the soil. 
+
+## Load Libraries
+```{r, echo = FALSE, message = FALSE}
+library(here)
+library(readxl)
+library(tidyverse)
+library(phyloseq)
+library(iNEXT)
+library(data.table)
+library(reshape2)
+library(car)
+library(cowplot)
+```
+
+## Set up aesthetic for plotting
+
+```{r}
+
+SF1_aes <- aes(x = Treatment,
+               y = value,
+               shape = soil,
+               fill = oil)
+
+my.scale_aes <- list(scale_shape_manual(values = c(21,24)),
+                     scale_fill_manual(values = c("white", "black")),
+                     theme_bw(),
+                     guides(fill = guide_legend(override.aes=list(shape=21, size = 4)),
+                            shape = guide_legend(override.aes=list(size = 4))),
+                     labs(y = "Effective Number of Species",
+                          shape = "Soil",
+                          fill = "Oil"),
+                     facet_grid(cols = vars(time),
+                                  rows = vars(hill_order), 
+                                scales = "free_y"),
+                     theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+
+```
+
+## Import 16S phyloseq object and clean
+```{r}
+
+#make phyloseq object-----
+
+
+#read in data
+seqtab.nochim <- readRDS("../../data/metagenome/16S/dada2/16S_soil_otu.rds")
+samdf <- readRDS("../../data/metagenome/16s/dada2/16S_soil_env.rds")
+taxa <- readRDS("../../data/metagenome/16s/dada2/16S_soil_taxa.rds")
+
+SF1 <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxa))
+
+#add sampleID to match ITS
+sample_data(SF1)$sampleID <- paste0("SF1_", rownames(sample_data(SF1)))
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "LN",
+                                             "SLN")
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "LY",
+                                             "SLY")
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "SN",
+                                             "SSN")
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "SY",
+                                             "SSY")
+
+#Replace sample data-----
+
+
+samdf <- as.data.frame(read_excel("../../data/soil_chem/SF1_soil_chem_all_data.xls", 
+                                  sheet = "data_cleaned"))
+
+#reorder to match
+samdf <- samdf[match(sample_data(SF1)$sampleID, samdf$sampleID),]
+
+#do any sampleID not match?
+any(sample_data(SF1)$sampleID!=samdf$sampleID)
+
+#replace rownames on both
+rownames(samdf) <- samdf$sampleID
+sample_names(SF1) <- sample_data(SF1)$sampleID
+
+#double check that rownames matches sampleID
+any(rownames(samdf)!=samdf$sampleID)
+
+#cleaning and fixing----
+
+#reorder factors
+samdf$time <- factor(samdf$time, levels = c("pre-exp","post-exp"))
+
+#rename factors  
+library(plyr)
+
+samdf$soil <- revalue(samdf$soil, c("L"="Live Soil", "S"="Autoclaved Soil"))
+samdf$oil <- revalue(samdf$oil, c("Y"="Oiled", "N"="No Oil"))
+samdf$time <- revalue(samdf$time, c("pre-exp"="Pre-Experiment", "post-exp"="Post-Experiment"))
+
+#rename chem titles
+colnames(samdf) <- c("sampleID", "soil", "oil", "time", "Calcium", "Copper", "Magnesium", "pH", "Phosphorus", "Potassium",  "Sodium", "Sulfur", "Zinc", "Percent Carbon", "Percent Nitrogen")
+
+samdf$Treatment <- interaction(samdf$soil, samdf$oil, sep = " , ")
+samdf$Treatment <- factor(samdf$Treatment, levels = c("Live Soil , No Oil","Live Soil , Oiled", "Autoclaved Soil , No Oil", "Autoclaved Soil , Oiled"))
+
+#put new data into pseq object
+sample_data(SF1) <- samdf
+
+
+#clean up taxa names to something readable instead of sequence
+taxa_names(SF1) <- paste0("Seq", seq(ntaxa(SF1)))
+
+rm(samdf)
+rm(seqtab.nochim)
+rm(taxa)
+
+#rename for 16S
+SF1.16S <- SF1
+rm(SF1)
+```
+
+## Import ITS phyloseq object and clean
+```{r}
+
+#make phyloseq object-----
+
+
+#read in data
+SF1 <- readRDS("../../S5_SF1_ITS_seqs_BI/SF1_ITS_ps.rds")
+
+#Replace sample data-----
+
+samdf <- as.data.frame(read_excel("../../data/soil_chem/SF1_soil_chem_all_data.xls", 
+                                  sheet = "data_cleaned"))
+
+#reorder to match
+samdf <- samdf[match(sample_data(SF1)$sampleID, samdf$sampleID),]
+
+#do any sampleID not match?
+any(sample_data(SF1)$sampleID!=samdf$sampleID)
+
+#replace rownames on both
+rownames(samdf) <- samdf$sampleID
+sample_names(SF1) <- sample_data(SF1)$sampleID
+
+#double check that rownames matches sampleID
+any(rownames(samdf)!=samdf$sampleID)
+
+#cleaning and fixing----
+
+#reorder factors
+samdf$time <- factor(samdf$time, levels = c("pre-exp","post-exp"))
+
+#rename factors  
+library(plyr)
+
+samdf$soil <- revalue(samdf$soil, c("L"="Live Soil", "S"="Autoclaved Soil"))
+samdf$oil <- revalue(samdf$oil, c("Y"="Oiled", "N"="No Oil"))
+samdf$time <- revalue(samdf$time, c("pre-exp"="Pre-Experiment", "post-exp"="Post-Experiment"))
+
+#rename chem titles
+colnames(samdf) <- c("sampleID", "soil", "oil", "time", "Calcium", "Copper", "Magnesium", "pH", "Phosphorus", "Potassium",  "Sodium", "Sulfur", "Zinc", "Percent Carbon", "Percent Nitrogen")
+
+samdf$Treatment <- interaction(samdf$soil, samdf$oil, sep = " , ")
+samdf$Treatment <- factor(samdf$Treatment, levels = c("Live Soil , No Oil","Live Soil , Oiled", "Autoclaved Soil , No Oil", "Autoclaved Soil , Oiled"))
+
+#put new data into pseq object
+sample_data(SF1) <- samdf
+rm(samdf)
+SF1.ITS <- SF1
+rm(SF1)
+
+```
+
+### Plot ITS
+```{r}
+
+p <- plot_richness(physeq = SF1.ITS, 
+              x = "Treatment", 
+              color ="Treatment", 
+              measures = c("Observed","Shannon", "Simpson"))
+
+p <- p$data
+p$value[which(p$variable == "Observed")] <- p$value[which(p$variable == "Observed")]
+p$value[which(p$variable == "Shannon")] <- exp(p$value[which(p$variable == "Shannon")])
+p$value[which(p$variable == "Simpson")] <- 1/(1 - p$value[which(p$variable == "Simpson")])
+
+p$hill_order <- NA
+
+p$hill_order[which(p$variable == "Observed")] <- "Hill Order = 0"
+p$hill_order[which(p$variable == "Shannon")] <- "Hill Order = 1"
+p$hill_order[which(p$variable == "Simpson")] <- "Hill Order = 2"
+
+alpha.ITS <- p %>% 
+  ggplot(mapping = SF1_aes) +
+  geom_point() +
+  my.scale_aes
+
+alpha.ITS
+
+```
+
+
+## LM on Diversity - ITS all samples
+```{r}
+
+p.simp <- p %>%
+  filter(hill_order=="Hill Order = 2")
+
+M <- lm(value ~ soil*oil*time, data = p.simp)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil*time, data = p.simp)
+
+p.shan <- p %>%
+  filter(hill_order=="Hill Order = 1")
+
+M <- lm(value ~ soil*oil*time, data = p.shan)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil*time, data = p.shan)
+
+p.rich <- p %>%
+  filter(hill_order=="Hill Order = 0")
+
+M <- lm(value ~ soil*oil*time, data = p.rich)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil*time, data = p.rich)
+
+```
+
+## LM on ITS - Just post-experiment samples.
+
+```{r}
+
+p.simp <- p %>%
+  filter(hill_order=="Hill Order = 2" & time=="Post-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.simp)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.simp)
+
+p.shan <- p %>%
+  filter(hill_order=="Hill Order = 1" & time=="Post-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.shan)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.shan)
+
+p.rich <- p %>%
+  filter(hill_order=="Hill Order = 0" & time=="Post-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.rich)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.rich)
+
+```
+
+## LM on ITS - Just Pre-experiment samples.
+
+```{r}
+
+p.simp <- p %>%
+  filter(hill_order=="Hill Order = 2" & time=="Pre-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.simp)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.simp)
+
+p.shan <- p %>%
+  filter(hill_order=="Hill Order = 1" & time=="Pre-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.shan)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.shan)
+
+p.rich <- p %>%
+  filter(hill_order=="Hill Order = 0" & time=="Pre-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.rich)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.rich)
+
+```
+
+### Plot 16S
+```{r}
+
+p <- plot_richness(physeq = SF1.16S, 
+              x = "Treatment", 
+              color ="Treatment", 
+              measures = c("Observed","Shannon", "Simpson"))
+
+p <- p$data
+p$value[which(p$variable == "Observed")] <- p$value[which(p$variable == "Observed")]
+p$value[which(p$variable == "Shannon")] <- exp(p$value[which(p$variable == "Shannon")])
+p$value[which(p$variable == "Simpson")] <- 1/(1 - p$value[which(p$variable == "Simpson")])
+
+p$hill_order <- NA
+
+p$hill_order[which(p$variable == "Observed")] <- "Hill Order = 0"
+p$hill_order[which(p$variable == "Shannon")] <- "Hill Order = 1"
+p$hill_order[which(p$variable == "Simpson")] <- "Hill Order = 2"
+
+alpha.16S <- p %>% 
+  ggplot(mapping = SF1_aes) +
+  geom_point() +
+  my.scale_aes +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+alpha.16S
+
+
+
+```
+
+## LM on 16S
+```{r}
+
+p.simp <- p %>%
+  filter(hill_order=="Hill Order = 2")
+
+M <- lm(value ~ soil*oil*time, data = p.simp)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil*time, data = p.simp)
+
+p.shan <- p %>%
+  filter(hill_order=="Hill Order = 1")
+
+M <- lm(value ~ soil*oil*time, data = p.shan)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil*time, data = p.shan)
+
+p.rich <- p %>%
+  filter(hill_order=="Hill Order = 0")
+
+M <- lm(value ~ soil*oil*time, data = p.rich)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil*time, data = p.rich)
+
+```
+
+## LM on 16S - Just post-experiment samples.
+
+```{r}
+
+p.simp <- p %>%
+  filter(hill_order=="Hill Order = 2" & time=="Post-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.simp)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.simp)
+
+p.shan <- p %>%
+  filter(hill_order=="Hill Order = 1" & time=="Post-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.shan)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.shan)
+
+p.rich <- p %>%
+  filter(hill_order=="Hill Order = 0" & time=="Post-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.rich)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.rich)
+
+```
+
+## LM on 16S - Just pre-experiment samples.
+
+```{r}
+
+p.simp <- p %>%
+  filter(hill_order=="Hill Order = 2" & time=="Pre-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.simp)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.simp)
+
+p.shan <- p %>%
+  filter(hill_order=="Hill Order = 1" & time=="Pre-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.shan)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.shan)
+
+p.rich <- p %>%
+  filter(hill_order=="Hill Order = 0" & time=="Pre-Experiment")
+
+M <- lm(value ~ soil*oil, data = p.rich)
+summary(M)
+
+hist(resid(M))
+shapiro.test(resid(M))
+leveneTest(y = value ~ soil*oil, data = p.rich)
+
+```
+
+
+## Plot Final Figure
+
+```{r, eval=FALSE}
+
+top <- plot_grid(alpha.ITS + labs(subtitle = "Fungi") + theme(axis.text.x = element_blank(), axis.title.x = element_blank(), legend.position = "none"), 
+          alpha.16S + labs(subtitle = "Bacteria") + theme(legend.position = "none"), 
+          ncol = 1, 
+          rel_heights = c(0.75,1),
+          labels = "AUTO")
+
+bottom <- get_legend(alpha.ITS + (theme(legend.position = "bottom")))
+
+plot_grid(top, bottom, ncol = 1, rel_heights = c(1, 0.1))
+
+ggsave(here::here("figs", "manuscript", "alpha_div", "SF1_alpha_div_fig_V1.png"), width = 6, height = 10, units = "in" )
+
+```
+
+## Below this wasn't necesary
+
+After thinking about it, the iNEXT metrics weren't useful because I wasn't interested in the linkage between replicates because this wasn't a marsh but rather discrete experimental units.  I wanted to see how diverse they ended up, not their collecvtive diversity like you might want to see in a marsh site.
+
+## iNEXT Abundance-Based Diversity
+
+Fungi.
+
+```{r, eval=FALSE}
+
+mdf <- psmelt(SF1.ITS)
+
+# compute taxa sum according to sample type
+sampletype_abund <- dplyr::group_by(mdf, OTU, Treatment, time) %>% 
+  dplyr::summarise(abundance = sum(Abundance))
+
+df.taxasums <- sampletype_abund %>%
+pivot_wider(names_from = c(Treatment, time), names_sep = ".", values_from = c(abundance)) %>%
+  as.data.frame() 
+
+df.taxasums1 <- df.taxasums[,-1]
+rownames(df.taxasums1) <- df.taxasums[,1]
+
+Sys.time()
+abund.out <- iNEXT(x = df.taxasums1,
+                       q = c(0,2),
+                      datatype = "abundance",
+                      se = TRUE,
+                      conf = 0.95,
+                      nboot = 1000,
+                      endpoint = 1500000)
+Sys.time()
+
+#If you're pressed for time, q = 1 is the reason this takes so long.  q =0,2 are done in minutes
+
+#Extract results (list with data.frames for each sample)
+voi.inext.all.abund <- rbindlist(abund.out$iNextEst, idcol = "Treatment")
+
+vars <- colsplit(voi.inext.all.abund$Treatment, "\\.", c("Treatment", "time"))
+voi.inext.all.abund$Treatment <- vars$Treatment
+voi.inext.all.abund$time <- vars$time
+
+vars <- colsplit(voi.inext.all.abund$Treatment, " Soil , ", c("soil", "oil"))
+voi.inext.all.abund <- cbind(voi.inext.all.abund, vars)
+
+voi.inext.all.abund <- voi.inext.all.abund %>% 
+  dplyr::rename("hill_order" = order) 
+
+```
+
+### Plot of Abundance-weighted diversity 
+
+ITS
+
+```{r, eval=FALSE}
+
+#Just Hill order =  0 and 2
+voi.inext.all.abund %>%
+  filter(method=="observed") %>% 
+  ggplot(aes(x = Treatment,
+               y = qD,
+               shape = soil,
+               fill = oil)) +
+  geom_point() +
+  my.scale_aes +
+  geom_errorbar(aes(ymax = qD.UCL,
+                    ymin = qD.LCL),
+                width = 0.2)
+
+```
+## iNEXT Abundance-Based Diversity
+
+Bacteria
+
+```{r, eval=FALSE}
+
+mdf <- psmelt(SF1.16S)
+
+# compute taxa sum according to sample type
+sampletype_abund <- dplyr::group_by(mdf, OTU, Treatment, time) %>% 
+  dplyr::summarise(abundance = sum(Abundance))
+
+df.taxasums <- sampletype_abund %>%
+pivot_wider(names_from = c(Treatment, time), names_sep = ".", values_from = c(abundance)) %>%
+  as.data.frame() 
+
+df.taxasums1 <- df.taxasums[,-1]
+rownames(df.taxasums1) <- df.taxasums[,1]
+
+Sys.time()
+abund.out <- iNEXT(x = df.taxasums1,
+                       q = c(0,2),
+                      datatype = "abundance",
+                      se = TRUE,
+                      conf = 0.95,
+                      nboot = 10,
+                      endpoint = 1500000)
+Sys.time()
+
+#If you're pressed for time, q = 1 is the reason this takes so long.  q =0,2 are done in minutes
+
+#Extract results (list with data.frames for each sample)
+voi.inext.all.abund <- rbindlist(abund.out$iNextEst, idcol = "Treatment")
+
+vars <- colsplit(voi.inext.all.abund$Treatment, "\\.", c("Treatment", "time"))
+voi.inext.all.abund$Treatment <- vars$Treatment
+voi.inext.all.abund$time <- vars$time
+
+vars <- colsplit(voi.inext.all.abund$Treatment, " Soil , ", c("soil", "oil"))
+voi.inext.all.abund <- cbind(voi.inext.all.abund, vars)
+
+voi.inext.all.abund <- voi.inext.all.abund %>% 
+  dplyr::rename("hill_order" = order) 
+
+```
+
+### Plot of Abundance-weighted diversity 
+
+16S
+
+```{r, eval=FALSE}
+
+#Just Hill order =  0 and 2
+voi.inext.all.abund %>%
+  filter(method=="observed") %>% 
+  ggplot(aes(x = Treatment,
+               y = qD,
+               shape = soil,
+               fill = oil)) +
+  geom_point() +
+  my.scale_aes +
+  geom_errorbar(aes(ymax = qD.UCL,
+                    ymin = qD.LCL),
+                width = 0.2)
+
+```
+
+## iNEXT Incidence-Based Diversity
+
+Bacteria
+
+```{r, eval=FALSE}
+
+mdf <- psmelt(SF1.16S)
+
+# compute taxa sum according to sample type
+sampletype_abund <- dplyr::group_by(mdf, OTU, Treatment, time) %>% 
+  dplyr::summarise(abundance = sum(Abundance))
+
+df.taxasums <- sampletype_abund %>%
+pivot_wider(names_from = c(Treatment, time), names_sep = ".", values_from = c(abundance)) %>%
+  as.data.frame() 
+
+df.taxasums1 <- df.taxasums[,-1]
+rownames(df.taxasums1) <- df.taxasums[,1]
+
+Sys.time()
+abund.out <- iNEXT(x = df.taxasums1,
+                       q = c(0,2),
+                      datatype = "abundance",
+                      se = TRUE,
+                      conf = 0.95,
+                      nboot = 10,
+                      endpoint = 1500000)
+Sys.time()
+
+#If you're pressed for time, q = 1 is the reason this takes so long.  q =0,2 are done in minutes
+
+#Extract results (list with data.frames for each sample)
+voi.inext.all.abund <- rbindlist(abund.out$iNextEst, idcol = "Treatment")
+
+vars <- colsplit(voi.inext.all.abund$Treatment, "\\.", c("Treatment", "time"))
+voi.inext.all.abund$Treatment <- vars$Treatment
+voi.inext.all.abund$time <- vars$time
+
+vars <- colsplit(voi.inext.all.abund$Treatment, " Soil , ", c("soil", "oil"))
+voi.inext.all.abund <- cbind(voi.inext.all.abund, vars)
+
+voi.inext.all.abund <- voi.inext.all.abund %>% 
+  dplyr::rename("hill_order" = order) 
+
+```
+
+### Plot of Incidence-weighted diversity 
+
+16S
+
+```{r, eval=FALSE}
+
+#Just Hill order =  0 and 2
+voi.inext.all.abund %>%
+  filter(method=="observed") %>% 
+  ggplot(aes(x = Treatment,
+               y = qD,
+               shape = soil,
+               fill = oil)) +
+  geom_point() +
+  my.scale_aes +
+  geom_errorbar(aes(ymax = qD.UCL,
+                    ymin = qD.LCL),
+                width = 0.2)
+
+voi.inext.all.abund %>%
+  filter(method=="observed" & time=="Post-Experiment")
+```

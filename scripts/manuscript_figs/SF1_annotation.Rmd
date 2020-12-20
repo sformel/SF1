@@ -1,0 +1,107 @@
+---
+title: "SF1_annotation"
+author: "Stephen Formel"
+date: "12/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Filter and makes sense of Trinotate and dammti annotations
+
+last updated: Dec 14, 2020 by Steve Formel
+
+## Load Libraries
+
+```{r, echo=FALSE, message=FALSE}
+
+library(here)
+library(tidyverse)
+```
+
+## Load in data 
+
+```{r}
+
+# isoform matrix if needed
+# df = read.table(here::here("data",
+#                      "transcriptome",
+#                      "SF1_Trinity_24Mar2019_output",
+#                      "salmon_output",
+#                      "salmon.isoform.counts.matrix"), 
+#                 header=T,
+#                 com='', 
+#                 row.names=1,
+#                 check.names=F,
+#                 sep='\t')
+
+
+# df.meta = read.csv(here::here("data",
+#                         "transcriptome",
+#                         "SF1_Trinity_24Mar2019_output",
+#                         "salmon_output",
+#                         "SF1_done_sample_sheet.csv"), 
+#                         fileEncoding="UTF-8-BOM")
+
+# colnames(df) <- df.meta$sample_ID
+
+#read in trinotate results
+trinotate <- read.csv(file = here("data",
+                                  "transcriptome",
+                                  "Trinotate",
+                                  "trinotate_annotation_report_11Sep2019.csv")) 
+
+LF <- list.files(path = here("data", 
+                             "transcriptome",
+                             "SF1_Trinity_24Mar2019_output",
+                             "DEseq_output"), pattern = "*.DESeq2.DE_results$", full.names = TRUE)
+df.list = lapply(LF, 
+                 read.table, 
+                 header=T,
+                 com='', 
+                 row.names=1,
+                 check.names=F,
+                 sep='\t')
+```
+
+Filter out the log2fold change above absolute value of 10 and add rownames as variables
+
+```{r}
+
+df.list.filt <- lapply(df.list, function(x){
+  x %>% 
+  filter(abs(log2FoldChange)>10)
+})
+
+df.list.filt <- lapply(df.list.filt, function(x){
+  x$transcript_id <- rownames(x)
+  return(x)
+})
+```
+
+
+What are the genes listed in live soil when you add oil?
+
+```{r}
+
+df_Live_oil_FX <- inner_join(df.list.filt[[1]], trinotate,  by = "transcript_id")
+df_No_oil_autoclave_FX <- inner_join(df.list.filt[[2]], trinotate,  by = "transcript_id")
+df_Yes_oil_autoclave_FX <- inner_join(df.list.filt[[5]], trinotate,  by = "transcript_id")
+df_autoclave_oil_FX <- inner_join(df.list.filt[[6]], trinotate,  by = "transcript_id")
+
+df_Live_oil_FX %>% 
+  select(transcript_id, log2FoldChange, Kegg)
+
+df_autoclave_oil_FX %>% 
+  select(transcript_id, log2FoldChange, Kegg)
+
+df_No_oil_autoclave_FX %>% 
+  select(transcript_id, log2FoldChange, gene_ontology_blast)
+
+df_Yes_oil_autoclave_FX %>% 
+  select(transcript_id, log2FoldChange, gene_ontology_blast)
+
+```
+

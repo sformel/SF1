@@ -1,0 +1,234 @@
+---
+title: "SF1_16S_aldex"
+author: "Stephen Formel"
+date: "12/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Exploration of differential 16S ASV in the soil.  Following [ALDEx2 tutorial](https://www.bioconductor.org/packages/release/bioc/vignettes/ALDEx2/inst/doc/ALDEx2_vignette.pdf)
+
+```{r load libraries}
+library(here)
+library(ALDEx2)
+library(tidyverse)
+library(readxl)
+library(phyloseq)
+library(stringr)
+library(compositions)
+```
+
+Import 16S phyloseq object and clean
+```{r}
+
+#make phyloseq object-----
+
+
+#read in data
+SF1 <- readRDS("../../S5_SF1_ITS_seqs_BI/SF1_ITS_ps.rds")
+
+#Replace sample data-----
+
+samdf <- as.data.frame(read_excel("../../data/soil_chem/SF1_soil_chem_all_data.xls", 
+                                  sheet = "data_cleaned"))
+
+#reorder to match
+samdf <- samdf[match(sample_data(SF1)$sampleID, samdf$sampleID),]
+
+#do any sampleID not match?
+any(sample_data(SF1)$sampleID!=samdf$sampleID)
+
+#replace rownames on both
+rownames(samdf) <- samdf$sampleID
+sample_names(SF1) <- sample_data(SF1)$sampleID
+
+#double check that rownames matches sampleID
+any(rownames(samdf)!=samdf$sampleID)
+
+#cleaning and fixing----
+
+#reorder factors
+samdf$time <- factor(samdf$time, levels = c("pre-exp","post-exp"))
+
+#rename factors  
+library(plyr)
+
+samdf$soil <- revalue(samdf$soil, c("L"="Live Soil", "S"="Autoclaved Soil"))
+samdf$oil <- revalue(samdf$oil, c("Y"="Oiled", "N"="No Oil"))
+samdf$time <- revalue(samdf$time, c("pre-exp"="Pre-Experiment", "post-exp"="Post-Experiment"))
+
+#rename chem titles
+colnames(samdf) <- c("sampleID", "soil", "oil", "time", "Calcium", "Copper", "Magnesium", "pH", "Phosphorus", "Potassium",  "Sodium", "Sulfur", "Zinc", "Percent Carbon", "Percent Nitrogen")
+
+samdf$Treatment <- interaction(samdf$soil, samdf$oil, sep = " , ")
+samdf$Treatment <- factor(samdf$Treatment, levels = c("Live Soil , No Oil","Live Soil , Oiled", "Autoclaved Soil , No Oil", "Autoclaved Soil , Oiled"))
+
+#put new data into pseq object
+sample_data(SF1) <- samdf
+
+```
+
+```{r}
+
+#load in ITS counts
+
+SF1 <- prune_samples(samples = sample_data(SF1)$time=="Post-Experiment", SF1)
+df <- otu_table(SF1) %>% 
+  as.data.frame()
+
+#round to make integers
+
+#df <- round(df, digits = 0)
+
+```
+
+## PCA
+```{r}
+
+clr.df <- clr(df)
+pca = prcomp(clr.df, center = FALSE, scale. = FALSE)
+
+#RDS Transferred over Cypress into data folder
+PCA.loadings=pca$rotation
+PCA.scores = pca$x
+
+```
+
+## Plot
+
+```{r}
+
+#get summary data
+pca.sum <- as.data.frame(summary(pca)$importance)
+df.PCA <- cbind(PCA.scores, sample_data(SF1))
+
+ggplot(data = df.PCA, 
+                aes(x = PC1, y = PC2, 
+                    fill = Treatment)) +
+  geom_point(size = 6,
+             shape = 21) +
+  geom_polygon(alpha = 0.5) + 
+  scale_fill_manual(values = c("#D55E00", "#56B4E9", "#F0E442","black")) +
+  labs(title = "PCA on Root Transcriptome",
+       x = paste("PC1 (", round(pca.sum$PC1[2]*100, digits = 1), "%)"),
+       y = paste("PC1 (", round(pca.sum$PC2[2]*100, digits = 1), "%)")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+  #ggsave(".png", width = 10, height = 7, units = "in")
+
+```
+
+## Run Aldex
+
+```{r}
+
+df.t <- t(df)
+df.Live <- df.t[,c(1:6)]
+df.Auto <- df.t[,c(7:12)]
+
+#conditions
+conds <- c(rep("No Oil", 3), rep("Oil Added", 3))
+
+
+```
+
+
+```{r}
+
+x <- aldex.clr(df.Auto, conds, mc.samples=1000, denom="all", verbose=F, useMC = FALSE)
+x2 <- aldex.effect(x, useMC = FALSE)
+
+#x <- aldex(df.Live, conds, mc.samples=128, denom="all",
+ #          test="t", effect=TRUE)
+
+ALDEx2::aldex.plot(x)
+
+plot(x2$diff.win, x2$diff.btw)
+
+data(selex)
+selex <- selex[1201:1600,] # subset for efficiency
+conds <- c(rep("NS", 7), rep("S", 7))
+x <- aldex(selex, conds, mc.samples=128, denom="all",
+           test="t", effect=TRUE)
+
+
+
+```
+
+See Aldex2 manual section 6.3 for an explanation of effect size as relevant statistic
+
+```{r}
+
+x2 %>% 
+  arrange(effect)
+```
+
+### Didn't work
+
+0.5 million features and 1000 mc.samples was too much for my computer.  I needed to do this on Cypress.  I installed aldex on cypress through bioconda.  But it had issues installing one package.  I fixed those by opening R in the aldex conda environment and then performing the normal bioconductor installation of the package (GenomeInfoDbData).
+
+### Script that was run on Cypress
+
+```{SLURM}
+
+module load anaconda3/5.1.0
+source activate aldex
+
+```
+
+R
+
+library(here)
+library(ALDEx2)
+library(dplyr)
+library(reshape2)
+
+#load in Salmon Isoform counts
+
+df <- read.table(here("salmon.isoform.counts.matrix"),
+                 header=T, 
+                 com='',
+                 row.names=1,
+                 check.names=F,
+                 sep='\t')
+
+#round to make integers
+
+df <- round(df, digits = 0)
+
+df.Live <- df[,c(1:6)]
+df.Auto <- df[,c(7:12)]
+
+#subset for testing
+df.Live <- df.Live[c(1:100000),]
+df.Auto <- df.Auto[c(1:100000),]
+
+#load in Experimental Conditions
+
+conds <- names(df) %>% 
+  colsplit(pattern = "_" ,
+           names = c("rm", "Soil", "rm2", "Oil", "Rep")) %>% 
+  select(-rm, -rm2)
+
+#conditions
+conds <- c(rep("No Oil", 3), rep("Oil Added", 3))
+
+
+clr.mat <- aldex.clr(df.Live, conds, mc.samples=1000, denom="all", verbose=F, useMC = TRUE)
+aldex.out.Live <- aldex.effect(clr.mat, useMC = TRUE)
+
+saveRDS(object = aldex.out.Live, file = "aldex.out.Live.rds")
+
+clr.mat <- aldex.clr(df.Live, conds, mc.samples=1000, denom="all", verbose=F, useMC = TRUE)
+aldex.out.Autoclave <- aldex.effect(clr.mat, useMC = TRUE)
+
+saveRDS(object = aldex.out.Autoclave, file = "aldex.out.Autoclave.rds")
+
+
+```
+
+
