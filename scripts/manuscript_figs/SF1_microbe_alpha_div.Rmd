@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Description and notes
-Figure of microbial alpha diversity in the soil. 
+Figure of microbial alpha diversity in the soil.  See [this conversation](https://stats.stackexchange.com/questions/115304/interpreting-output-from-anova-when-using-lm-as-input) for a nice explanation of the different R outputs when interpreting ANOVA and [this](https://ms.mcmaster.ca/peter/s2ma3/s2ma3_0001/factorialdf.html#:~:text=For%20the%20main%20effect%20of,of%20the%20factor%20minus%201.&text=For%20an%20interaction%20between%20factors,for%20the%20corresponding%20main%20effects.) for understanding degrees of freedom.
 
 ## Load Libraries
 ```{r, echo = FALSE, message = FALSE}
@@ -204,6 +204,9 @@ p$hill_order[which(p$variable == "Observed")] <- "Hill Order = 0"
 p$hill_order[which(p$variable == "Shannon")] <- "Hill Order = 1"
 p$hill_order[which(p$variable == "Simpson")] <- "Hill Order = 2"
 
+p <- p %>% 
+  mutate_if(is.character,as.factor)
+
 alpha.ITS <- p %>% 
   ggplot(mapping = SF1_aes) +
   geom_point() +
@@ -222,6 +225,7 @@ p.simp <- p %>%
 
 M <- lm(value ~ soil*oil*time, data = p.simp)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -231,7 +235,8 @@ p.shan <- p %>%
   filter(hill_order=="Hill Order = 1")
 
 M <- lm(value ~ soil*oil*time, data = p.shan)
-summary(M)
+summary(M) 
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -242,6 +247,7 @@ p.rich <- p %>%
 
 M <- lm(value ~ soil*oil*time, data = p.rich)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -258,6 +264,7 @@ p.simp <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.simp)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -268,6 +275,7 @@ p.shan <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.shan)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -278,6 +286,7 @@ p.rich <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.rich)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -294,6 +303,7 @@ p.simp <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.simp)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -304,6 +314,7 @@ p.shan <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.shan)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -314,6 +325,7 @@ p.rich <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.rich)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -340,6 +352,9 @@ p$hill_order[which(p$variable == "Observed")] <- "Hill Order = 0"
 p$hill_order[which(p$variable == "Shannon")] <- "Hill Order = 1"
 p$hill_order[which(p$variable == "Simpson")] <- "Hill Order = 2"
 
+p <- p %>% 
+  mutate_if(is.character,as.factor)
+
 alpha.16S <- p %>% 
   ggplot(mapping = SF1_aes) +
   geom_point() +
@@ -360,6 +375,7 @@ p.simp <- p %>%
 
 M <- lm(value ~ soil*oil*time, data = p.simp)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -370,6 +386,8 @@ p.shan <- p %>%
 
 M <- lm(value ~ soil*oil*time, data = p.shan)
 summary(M)
+anova(M)
+
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -380,6 +398,7 @@ p.rich <- p %>%
 
 M <- lm(value ~ soil*oil*time, data = p.rich)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -396,6 +415,7 @@ p.simp <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.simp)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -406,6 +426,7 @@ p.shan <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.shan)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -416,6 +437,7 @@ p.rich <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.rich)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -432,6 +454,7 @@ p.simp <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.simp)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -442,6 +465,7 @@ p.shan <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.shan)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))
@@ -452,6 +476,7 @@ p.rich <- p %>%
 
 M <- lm(value ~ soil*oil, data = p.rich)
 summary(M)
+anova(M)
 
 hist(resid(M))
 shapiro.test(resid(M))

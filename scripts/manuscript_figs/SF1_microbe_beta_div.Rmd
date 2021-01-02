@@ -1,0 +1,585 @@
+---
+title: "SF1_microbe_beta_div"
+author: "Stephen Formel"
+date: "1/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Description and notes
+
+Run PERMANOVA and make PCA, PCoA, and NMDS of 16S and ITS based on Aitchison, Bray Curtis and Jaccard
+
+## Load Libraries
+```{r, echo = FALSE, message = FALSE}
+library(here)
+library(readxl)
+library(tidyverse)
+library(phyloseq)
+library(iNEXT)
+library(data.table)
+library(reshape2)
+library(car)
+library(cowplot)
+library(compositions)
+library(vegan)
+```
+
+## Set up aesthetic for plotting
+
+```{r}
+
+SF1_aes <- aes(x = Treatment,
+               y = value,
+               shape = soil,
+               fill = oil)
+
+my.scale_aes <- list(geom_point(size = 4),
+                     geom_polygon(alpha = 0.5),
+                     scale_shape_manual(values = c(21,24)),
+                     scale_fill_manual(values = c("lightgray", "black")),
+                     theme_bw(),
+                     guides(fill = guide_legend(override.aes=list(shape=21, size = 4)),
+                            shape = guide_legend(override.aes=list(size = 4))),
+                     labs(shape = "Soil",
+                          fill = "Oil"),
+                     theme(plot.title = element_text(hjust = 0.5)))
+
+
+```
+
+## Import 16S phyloseq object and clean
+
+```{r}
+
+#read in data
+seqtab.nochim <- readRDS("../../data/metagenome/16S/dada2/16S_soil_otu.rds")
+samdf <- readRDS("../../data/metagenome/16s/dada2/16S_soil_env.rds")
+taxa <- readRDS("../../data/metagenome/16s/dada2/16S_soil_taxa.rds")
+
+SF1 <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxa))
+
+#add sampleID to match ITS
+sample_data(SF1)$sampleID <- paste0("SF1_", rownames(sample_data(SF1)))
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "LN",
+                                             "SLN")
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "LY",
+                                             "SLY")
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "SN",
+                                             "SSN")
+sample_data(SF1)$sampleID <- str_replace_all(sample_data(SF1)$sampleID,
+                                             "SY",
+                                             "SSY")
+
+#Replace sample data
+
+
+samdf <- as.data.frame(read_excel("../../data/soil_chem/SF1_soil_chem_all_data.xls", 
+                                  sheet = "data_cleaned"))
+
+#reorder to match
+samdf <- samdf[match(sample_data(SF1)$sampleID, samdf$sampleID),]
+
+#do any sampleID not match?
+any(sample_data(SF1)$sampleID!=samdf$sampleID)
+
+#replace rownames on both
+rownames(samdf) <- samdf$sampleID
+sample_names(SF1) <- sample_data(SF1)$sampleID
+
+#double check that rownames matches sampleID
+any(rownames(samdf)!=samdf$sampleID)
+
+#cleaning and fixing
+
+#reorder factors
+samdf$time <- factor(samdf$time, levels = c("pre-exp","post-exp"))
+
+#rename factors  
+library(plyr)
+
+samdf$soil <- revalue(samdf$soil, c("L"="Live Soil", "S"="Autoclaved Soil"))
+samdf$oil <- revalue(samdf$oil, c("Y"="Oiled", "N"="No Oil"))
+samdf$time <- revalue(samdf$time, c("pre-exp"="Pre-Experiment", "post-exp"="Post-Experiment"))
+
+#rename chem titles
+colnames(samdf) <- c("sampleID", "soil", "oil", "time", "Calcium", "Copper", "Magnesium", "pH", "Phosphorus", "Potassium",  "Sodium", "Sulfur", "Zinc", "Percent Carbon", "Percent Nitrogen")
+
+samdf$Treatment <- interaction(samdf$soil, samdf$oil, sep = " , ")
+samdf$Treatment <- factor(samdf$Treatment, levels = c("Live Soil , No Oil","Live Soil , Oiled", "Autoclaved Soil , No Oil", "Autoclaved Soil , Oiled"))
+
+#put new data into pseq object
+sample_data(SF1) <- samdf
+
+
+#clean up taxa names to something readable instead of sequence
+taxa_names(SF1) <- paste0("Seq", seq(ntaxa(SF1)))
+
+rm(samdf)
+rm(seqtab.nochim)
+rm(taxa)
+
+#rename for 16S
+SF1.16S <- SF1
+rm(SF1)
+```
+
+## Import ITS phyloseq object and clean
+
+```{r}
+
+#read in data
+SF1 <- readRDS("../../S5_SF1_ITS_seqs_BI/SF1_ITS_ps.rds")
+
+#Replace sample data
+
+samdf <- as.data.frame(read_excel("../../data/soil_chem/SF1_soil_chem_all_data.xls", 
+                                  sheet = "data_cleaned"))
+
+#reorder to match
+samdf <- samdf[match(sample_data(SF1)$sampleID, samdf$sampleID),]
+
+#do any sampleID not match?
+any(sample_data(SF1)$sampleID!=samdf$sampleID)
+
+#replace rownames on both
+rownames(samdf) <- samdf$sampleID
+sample_names(SF1) <- sample_data(SF1)$sampleID
+
+#double check that rownames matches sampleID
+any(rownames(samdf)!=samdf$sampleID)
+
+#cleaning and fixing
+
+#reorder factors
+samdf$time <- factor(samdf$time, levels = c("pre-exp","post-exp"))
+
+#rename factors  
+library(plyr)
+
+samdf$soil <- revalue(samdf$soil, c("L"="Live Soil", "S"="Autoclaved Soil"))
+samdf$oil <- revalue(samdf$oil, c("Y"="Oiled", "N"="No Oil"))
+samdf$time <- revalue(samdf$time, c("pre-exp"="Pre-Experiment", "post-exp"="Post-Experiment"))
+
+#rename chem titles
+colnames(samdf) <- c("sampleID", "soil", "oil", "time", "Calcium", "Copper", "Magnesium", "pH", "Phosphorus", "Potassium",  "Sodium", "Sulfur", "Zinc", "Percent Carbon", "Percent Nitrogen")
+
+samdf$Treatment <- interaction(samdf$soil, samdf$oil, sep = " , ")
+samdf$Treatment <- factor(samdf$Treatment, levels = c("Live Soil , No Oil","Live Soil , Oiled", "Autoclaved Soil , No Oil", "Autoclaved Soil , Oiled"))
+
+#put new data into pseq object
+sample_data(SF1) <- samdf
+rm(samdf)
+SF1.ITS <- SF1
+rm(SF1)
+
+```
+
+### Plot and PERMANOVA (adonis) of 16S - Aitchison
+
+```{r}
+
+SF1.post.16S <- prune_samples(sample_data(SF1.16S)$time=="Post-Experiment", SF1.16S)
+
+df <- otu_table(SF1.post.16S) %>% 
+  as.data.frame()
+
+df.meta <- sample_data(SF1.post.16S) %>% 
+  data.frame()
+
+clr.df <- clr(df)
+pca = prcomp(clr.df, center = FALSE, scale. = FALSE)
+
+PCA.loadings=pca$rotation
+PCA.scores = pca$x
+
+#For below analyses
+comm.df <- clr.df %>% 
+  as.data.frame()
+
+```
+
+#### Plot PCA - Aitchison
+
+```{r}
+
+#get summary data
+pca.sum <- as.data.frame(summary(pca)$importance)
+df.PCA <- cbind(PCA.scores,df.meta)
+
+ggplot(data = df.PCA, 
+                aes(x = PC1, 
+                    y = PC2, 
+                    shape = soil,
+                    fill = oil)) +
+  my.scale_aes +
+  labs(title = "PCA on 16S Metagenome - Aitchison",
+       x = paste("PC1 (", round(pca.sum$PC1[2]*100, digits = 1), "%)"),
+       y = paste("PC2 (", round(pca.sum$PC2[2]*100, digits = 1), "%)"))
+
+  #ggsave(".png", width = 10, height = 7, units = "in")
+
+```
+
+## Permanova - Aitchison
+
+```{r}
+
+set.seed(1)
+mod1 <- adonis(comm.df ~ soil*oil, data = df.meta, method = "euclidean") 
+mod1
+
+```
+
+### Plot and PERMANOVA (adonis) of 16S - Bray-Curtis
+
+```{r}
+
+SF1.post.16S <- prune_samples(sample_data(SF1.16S)$time=="Post-Experiment", SF1.16S)
+
+df <- otu_table(SF1.post.16S) %>% 
+  as.data.frame()
+
+df.meta <- sample_data(SF1.post.16S) %>% 
+  data.frame()
+
+```
+
+#### Plot PCoA - BC
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.16S, method = "PCoA", distance = "bray")
+
+B <- plot_ordination(SF1.post.16S, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = Axis.1,
+           y = Axis.2,
+           shape = soil,
+                    fill = oil)) +
+  my.scale_aes +
+  labs(title = "PCoA on 16S Metagenome - BC",
+       x = "Axis 1",
+       y = "Axis 2")
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+
+## Plot NMDS - BC
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.16S, method = "NMDS", distance = "bray")
+
+B <- plot_ordination(SF1.post.16S, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = NMDS1,
+           y = NMDS2,
+          shape = soil,
+          fill = oil)) +
+  my.scale_aes +
+  labs(title = "SF1 16S NMDS on Bray-Curtis - post experiment", 
+       caption = paste("stress = ", round(SF1.ord$stress, digits = 2), sep = " "))
+
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+
+## Permanova - BC
+
+```{r}
+
+set.seed(1)
+mod1 <- adonis(df ~ soil*oil, data = df.meta, method = "bray") 
+mod1
+
+```
+
+### Plot and PERMANOVA (adonis) of 16S - Jaccard index
+
+```{r}
+
+SF1.post.16S <- prune_samples(sample_data(SF1.16S)$time=="Post-Experiment", SF1.16S)
+
+#make binary
+df <- otu_table(SF1.post.16S) %>% 
+  as.data.frame()
+
+df[df > 0] <- 1
+
+otu_table(SF1.post.16S) <- otu_table(df, taxa_are_rows = FALSE)
+
+df.meta <- sample_data(SF1.post.16S) %>% 
+  data.frame()
+
+```
+
+## Plot PCoA - Jaccard
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.16S, method = "PCoA", distance = "jaccard", binary = TRUE)
+
+B <- plot_ordination(SF1.post.16S, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = Axis.1,
+           y = Axis.2,
+           shape = soil,
+           fill = oil)) +
+  my.scale_aes +
+  labs(title = "PCoA on 16S Metagenome - Jaccard",
+       x = "Axis 1",
+       y = "Axis 2")
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+
+## Plot NMDS - Jaccard
+
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.16S, method = "NMDS", distance = "jaccard", binary = TRUE)
+
+B <- plot_ordination(SF1.post.16S, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = NMDS1,
+           y = NMDS2,
+           shape = soil,
+           fill = oil)) +
+  my.scale_aes +
+  labs(title = "SF1 16S NMDS on Jacard - post experiment")
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+
+## Permanova - Jaccard
+
+```{r}
+
+set.seed(1)
+mod1 <- adonis(df ~ soil*oil, data = df.meta, method = "jaccard", binary = TRUE) 
+mod1
+
+```
+
+## ITS
+
+### Plot and PERMANOVA (adonis) of ITS - Aitchison
+
+```{r}
+
+SF1.post.ITS <- prune_samples(sample_data(SF1.ITS)$time=="Post-Experiment", SF1.ITS)
+
+df <- otu_table(SF1.post.ITS) %>% 
+  as.data.frame()
+
+df.meta <- sample_data(SF1.post.ITS) %>% 
+  data.frame()
+
+clr.df <- clr(df)
+pca = prcomp(clr.df, center = FALSE, scale. = FALSE)
+
+PCA.loadings=pca$rotation
+PCA.scores = pca$x
+
+#For below analyses
+comm.df <- clr.df %>% 
+  as.data.frame()
+
+```
+
+## Permanova - Aitchison
+
+```{r}
+
+set.seed(1)
+mod1 <- adonis(comm.df ~ soil*oil, data = df.meta, method = "euclidean") 
+mod1
+
+```
+
+## Plot PCA - Aitchison
+
+```{r}
+
+#get summary data
+pca.sum <- as.data.frame(summary(pca)$importance)
+df.PCA <- cbind(PCA.scores,df.meta)
+
+ggplot(data = df.PCA, 
+                aes(x = PC1, 
+                    y = PC2, 
+                    shape = soil,
+                    fill = oil)) +
+  my.scale_aes +
+  labs(title = "PCA on ITS Metagenome - Aitchison",
+       x = paste("PC1 (", round(pca.sum$PC1[2]*100, digits = 1), "%)"),
+       y = paste("PC2 (", round(pca.sum$PC2[2]*100, digits = 1), "%)"))
+
+  #ggsave(".png", width = 10, height = 7, units = "in")
+
+```
+
+
+### PERMANOVA (adonis) of ITS - Bray-Curtis
+
+```{r}
+
+SF1.post.ITS <- prune_samples(sample_data(SF1.ITS)$time=="Post-Experiment", SF1.ITS)
+
+df <- otu_table(SF1.post.ITS) %>% 
+  as.data.frame()
+
+df.meta <- sample_data(SF1.post.ITS) %>% 
+  data.frame()
+
+```
+## Plot
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.ITS, method = "PCoA", distance = "bray")
+
+B <- plot_ordination(SF1.post.ITS, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = Axis.1,
+           y = Axis.2,
+           shape = soil,
+           fill = oil)) +
+  my.scale_aes +
+  labs(title = "PCoA on ITS Metagenome",
+       x = "Axis 1",
+       y = "Axis 2")
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+## Plot
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.ITS, method = "NMDS", distance = "bray")
+
+B <- plot_ordination(SF1.post.ITS, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = NMDS1,
+           y = NMDS2,
+           shape = soil,
+           fill = oil)) +
+  my.scale_aes +
+  labs(title = "SF1 ITS NMDS on Bray-Curtis - post experiment", 
+       caption = paste("stress = ", round(SF1.ord$stress, digits = 2), sep = " "))
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+
+## Permanova
+```{r}
+
+set.seed(1)
+mod1 <- adonis(df ~ soil*oil, data = df.meta, method = "bray") 
+mod1
+
+```
+
+### PERMANOVA (adonis) of ITS - Jaccard index
+
+```{r}
+
+SF1.post.ITS <- prune_samples(sample_data(SF1.ITS)$time=="Post-Experiment", SF1.ITS)
+
+#make binary
+df <- otu_table(SF1.post.ITS) %>% 
+  as.data.frame()
+
+df[df > 0] <- 1
+
+otu_table(SF1.post.ITS) <- otu_table(df, taxa_are_rows = FALSE)
+
+df.meta <- sample_data(SF1.post.ITS) %>% 
+  data.frame()
+
+```
+## Plot
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.ITS, method = "PCoA", distance = "jaccard", binary = TRUE)
+
+B <- plot_ordination(SF1.post.ITS, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = Axis.1,
+           y = Axis.2,
+           shape = soil,
+                    fill = oil)) +
+  my.scale_aes +
+  labs(title = "PCoA on ITS Metagenome - Jaccard",
+       x = "Axis 1",
+       y = "Axis 2")
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+## Plot
+
+Used PCoA so it can be compared to the PCA (which is the equivalent when PCoA is based on Euclidean)
+
+```{r}
+set.seed(1)
+
+SF1.ord <- ordinate(SF1.post.ITS, method = "NMDS", distance = "jaccard", binary = TRUE)
+
+B <- plot_ordination(SF1.post.ITS, SF1.ord, type="samples", color="oil")
+
+ggplot(data = B$data,
+       aes(x = NMDS1,
+           y = NMDS2,
+           shape = soil,
+                    fill = oil)) +
+  my.scale_aes +
+  labs(title = "SF1 ITS NMDS on Jacard - post experiment")
+
+#ggsave(".png", width = 10, height = 7, units = "in")
+```
+
+## Permanova
+```{r}
+
+set.seed(1)
+mod1 <- adonis(df ~ soil*oil, data = df.meta, method = "jaccard", binary = TRUE) 
+mod1
+
+```

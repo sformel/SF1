@@ -123,7 +123,7 @@ ggplot(data = df.PCA,
   scale_fill_manual(values = c("#D55E00", "#56B4E9", "#F0E442","black")) +
   labs(title = "PCA on Root Transcriptome",
        x = paste("PC1 (", round(pca.sum$PC1[2]*100, digits = 1), "%)"),
-       y = paste("PC1 (", round(pca.sum$PC2[2]*100, digits = 1), "%)")) +
+       y = paste("PC2 (", round(pca.sum$PC2[2]*100, digits = 1), "%)")) +
   theme_bw() +
   theme(plot.title = element_text(hjust = 0.5))
 
